@@ -1,0 +1,121 @@
+# =============================================================================
+# EstuLanches - ambiente de produção
+#   Subir:      docker compose up -d --build
+#   Estado:     docker compose ps
+#   Logs:       docker compose logs app db
+#   Testes:     docker compose --profile test run --rm test
+# Variáveis sensíveis ficam no arquivo .env (copie de .env.example).
+# =============================================================================
+name: estulanches
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-estulanches}
+      POSTGRES_USER: ${POSTGRES_USER:-estulanches}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      TZ: America/Sao_Paulo
+    volumes:
+      - db_data:/var/lib/postgresql/data      # dados persistem entre reinícios
+    networks:
+      - backend                               # banco NÃO é exposto para fora
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  app:
+    build:
+      context: .
+      target: production
+      args:
+        APP_VERSION: ${APP_VERSION:-1.0.0}
+    image: estulanches:${APP_VERSION:-1.0.0}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TZ: America/Sao_Paulo
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-estulanches}
+      PGUSER: ${POSTGRES_USER:-estulanches}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?defina ADMIN_TOKEN no .env}
+      DB_POOL_MAX: ${DB_POOL_MAX:-10}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
+      RATE_LIMIT_PEDIDOS_MAX: ${RATE_LIMIT_PEDIDOS_MAX:-20}
+    ports:
+      - "${APP_PORT:-8080}:3000"              # http://localhost:8080
+    depends_on:
+      db:
+        condition: service_healthy            # só sobe quando o banco estiver pronto
+    networks:
+      - frontend
+      - backend
+    restart: unless-stopped
+    init: true                                # repassa sinais e evita processos zumbis
+    read_only: true                           # sistema de arquivos somente leitura
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL                                   # remove todas as capabilities do Linux
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+    logging: *logging
+
+  # ----- Somente para testes (perfil "test": não sobe no "up" normal) -----
+  db-test:
+    profiles: ["test"]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: estulanches_test
+      POSTGRES_USER: teste
+      POSTGRES_PASSWORD: teste
+    tmpfs:
+      - /var/lib/postgresql/data              # banco descartável, em memória
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teste -d estulanches_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    image: estulanches:test
+    environment:
+      PGHOST: db-test
+      PGDATABASE: estulanches_test
+      PGUSER: teste
+      PGPASSWORD: teste
+    depends_on:
+      db-test:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  frontend:
+  backend:
+    internal: true                            # rede interna, sem saída para a internet
+
+volumes:
+  db_data:

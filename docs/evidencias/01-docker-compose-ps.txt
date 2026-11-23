@@ -1,0 +1,4 @@
+$ docker compose ps
+NAME                IMAGE                COMMAND                  SERVICE   CREATED          STATUS                    PORTS
+estulanches-app-1   estulanches:1.0.0    "docker-entrypoint.s…"   app       23 seconds ago   Up 16 seconds (healthy)   0.0.0.0:8080->3000/tcp
+estulanches-db-1    postgres:16-alpine   "docker-entrypoint.s…"   db        23 seconds ago   Up 22 seconds (healthy)   5432/tcp

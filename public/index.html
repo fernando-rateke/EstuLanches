@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EstuLanches</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca">🥪 <strong>EstuLanches</strong> <span class="sub">Cantina Escolar</span></div>
+    <nav class="abas" role="tablist">
+      <button class="aba ativa" data-aba="cardapio">Cardápio</button>
+      <button class="aba" data-aba="acompanhar">Meu pedido</button>
+      <button class="aba" data-aba="cantina">Cantina</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ALUNO: cardápio e carrinho -->
+    <section id="aba-cardapio" class="painel">
+      <div class="grade">
+        <div>
+          <h2>Cardápio de hoje</h2>
+          <div id="lista-produtos" class="produtos"></div>
+        </div>
+        <aside class="carrinho">
+          <h2>Seu pedido</h2>
+          <ul id="itens-carrinho" class="itens"></ul>
+          <p class="total">Total: <strong id="total-carrinho">R$ 0,00</strong></p>
+          <form id="form-pedido">
+            <label>Seu nome
+              <input id="cliente-nome" required minlength="2" maxlength="100" autocomplete="name">
+            </label>
+            <label>Observação (opcional)
+              <input id="observacao" maxlength="255" placeholder="Ex.: sem cebola">
+            </label>
+            <button type="submit" class="btn primario">Fazer pedido</button>
+          </form>
+          <p id="msg-pedido" class="msg" role="status"></p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ALUNO: acompanhar status -->
+    <section id="aba-acompanhar" class="painel oculto">
+      <h2>Acompanhar pedido</h2>
+      <form id="form-acompanhar" class="linha">
+        <input id="numero-pedido" type="number" min="1" placeholder="Nº do pedido" required>
+        <button class="btn primario">Consultar</button>
+      </form>
+      <div id="resultado-pedido"></div>
+    </section>
+
+    <!-- CANTINA: fila de pedidos e cardápio (requer token) -->
+    <section id="aba-cantina" class="painel oculto">
+      <form id="form-login" class="linha">
+        <input id="token" type="password" placeholder="Token da cantina" autocomplete="off" required>
+        <button class="btn primario">Entrar</button>
+      </form>
+      <div id="area-cantina" class="oculto">
+        <div class="linha entre">
+          <h2>Fila de pedidos</h2>
+          <div class="linha">
+            <select id="filtro-status">
+              <option value="">Todos</option>
+              <option value="recebido">Recebido</option>
+              <option value="preparando">Preparando</option>
+              <option value="pronto">Pronto</option>
+              <option value="entregue">Entregue</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+            <button id="btn-atualizar" class="btn">Atualizar</button>
+            <button id="btn-sair" class="btn">Sair</button>
+          </div>
+        </div>
+        <div id="fila-pedidos" class="fila"></div>
+
+        <h2>Gerenciar cardápio</h2>
+        <form id="form-produto" class="linha quebra">
+          <input id="p-nome" placeholder="Nome" required minlength="2" maxlength="100">
+          <input id="p-descricao" placeholder="Descrição" maxlength="255">
+          <select id="p-categoria">
+            <option value="lanche">Lanche</option>
+            <option value="salgado">Salgado</option>
+            <option value="refeicao">Refeição</option>
+            <option value="bebida">Bebida</option>
+            <option value="doce">Doce</option>
+          </select>
+          <input id="p-preco" type="number" min="0.01" step="0.01" placeholder="Preço (R$)" required>
+          <button class="btn primario">Adicionar</button>
+        </form>
+        <table class="tabela">
+          <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Disponível</th></tr></thead>
+          <tbody id="tabela-produtos"></tbody>
+        </table>
+      </div>
+      <p id="msg-cantina" class="msg" role="status"></p>
+    </section>
+  </main>
+
+  <footer class="rodape">EstuLanches <span id="versao"></span></footer>
+  <script src="/app.js"></script>
+</body>
+</html>

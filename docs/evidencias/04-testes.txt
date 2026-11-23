@@ -1,0 +1,107 @@
+PASS tests/integration/api.test.js
+  saúde e segurança
+    ✓ GET /health responde ok com banco conectado (30 ms)
+    ✓ envia cabeçalhos de segurança (helmet) e esconde X-Powered-By (8 ms)
+    ✓ serve o frontend (11 ms)
+    ✓ rotas da cantina exigem token (28 ms)
+    ✓ JSON inválido retorna 400 sem stack trace (8 ms)
+    ✓ tentativa de SQL injection no id é rejeitada (9 ms)
+    ✓ rota inexistente retorna 404 (10 ms)
+  cardápio (produtos)
+    ✓ cria, lista, edita e remove produto (24 ms)
+    ✓ produto indisponível some do cardápio público, mas aparece para a cantina (18 ms)
+    ✓ valida os dados do produto (9 ms)
+    ✓ não permite remover produto que já está em pedido (409) (25 ms)
+  pedidos
+    ✓ fluxo completo: aluno pede -> cantina prepara -> pronto -> entregue (50 ms)
+    ✓ o total é calculado no servidor (ignora preço enviado pelo cliente) (17 ms)
+    ✓ preço do pedido fica congelado mesmo se o cardápio mudar (19 ms)
+    ✓ não aceita produto indisponível nem inexistente (16 ms)
+    ✓ bloqueia transição de status inválida (409) (22 ms)
+    ✓ cantina lista e filtra a fila por status (62 ms)
+    ✓ pedido inexistente retorna 404 (9 ms)
+  limite de requisições (rate limit)
+    ✓ bloqueia excesso de pedidos com 429 (26 ms)
+
+PASS tests/unit/pedido.test.js
+  ✓ formatarReais formata em BRL (30 ms)
+  calcularTotal
+    ✓ soma preço × quantidade de cada item, em centavos (1 ms)
+    ✓ não sofre erro de ponto flutuante (centavos inteiros)
+    ✓ rejeita produto inexistente com 422 (6 ms)
+    ✓ rejeita produto indisponível (1 ms)
+  validarPedido
+    ✓ aceita pedido válido e normaliza o nome (1 ms)
+    ✓ agrupa itens repetidos do mesmo produto
+    ✓ rejeita sem nome (1 ms)
+    ✓ rejeita sem itens
+    ✓ rejeita itens não é lista
+    ✓ rejeita quantidade zero
+    ✓ rejeita quantidade fracionada
+    ✓ rejeita produto_id texto
+    ✓ rejeita soma acima do limite
+    ✓ rejeita corpo nulo
+    ✓ rejeita mais de 20 itens (1 ms)
+  podeTransitar (fluxo do pedido)
+    ✓ recebido -> preparando = true (1 ms)
+    ✓ preparando -> pronto = true
+    ✓ pronto -> entregue = true (1 ms)
+    ✓ recebido -> cancelado = true (1 ms)
+    ✓ preparando -> cancelado = true
+    ✓ recebido -> entregue = false
+    ✓ pronto -> cancelado = false (1 ms)
+    ✓ entregue -> recebido = false
+    ✓ cancelado -> preparando = false
+    ✓ inexistente -> pronto = false
+
+PASS tests/unit/seguranca.test.js
+  exigirAdmin
+    ✓ permite com o token correto (7 ms)
+    ✓ bloqueia sem cabeçalho com 401 (3 ms)
+    ✓ bloqueia token errado com 401 (3 ms)
+    ✓ bloqueia esquema errado com 401 (3 ms)
+    ✓ bloqueia só o esquema com 401 (2 ms)
+    ✓ bloqueia tudo se o token não foi configurado (4 ms)
+  config
+    ✓ lê variáveis de ambiente com valores padrão (1 ms)
+    ✓ em produção exige ADMIN_TOKEN forte (1 ms)
+
+PASS tests/unit/produto.test.js
+  validarProduto
+    ✓ aceita produto válido (1 ms)
+    ✓ rejeita nome curto
+    ✓ rejeita categoria inválida
+    ✓ rejeita preço negativo (1 ms)
+    ✓ rejeita preço decimal (deve ser centavos)
+    ✓ rejeita preço como texto
+    ✓ rejeita disponivel não booleano
+    ✓ edição parcial valida só os campos enviados (1 ms)
+    ✓ edição parcial ignora campos desconhecidos (proteção contra mass assignment) (1 ms)
+
+----------------|---------|----------|---------|---------|-------------------
+File            | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
+----------------|---------|----------|---------|---------|-------------------
+All files       |   90.84 |     86.7 |   89.09 |   93.43 |                   
+ src            |   78.88 |    56.66 |    62.5 |   84.33 |                   
+  app.js        |   96.66 |      100 |     100 |   96.66 | 32                
+  config.js     |     100 |     92.3 |     100 |     100 | 14                
+  db.js         |   57.69 |     37.5 |      40 |   68.18 | 18-25             
+  logger.js     |      40 |       20 |      50 |    37.5 | 10-12,17-18       
+  migrate.js    |   93.33 |       25 |      50 |     100 | 12-17             
+ src/domain     |   97.61 |    95.65 |     100 |    97.4 |                   
+  erros.js      |     100 |      100 |     100 |     100 |                   
+  pedido.js     |   97.87 |    97.77 |     100 |   97.56 | 37                
+  produto.js    |   96.96 |    93.61 |     100 |   96.87 | 30                
+ src/middleware |   90.62 |    88.88 |     100 |   92.59 |                   
+  auth.js       |     100 |      100 |     100 |     100 |                   
+  erros.js      |   85.71 |       80 |     100 |   88.23 | 20-21             
+ src/routes     |      96 |    87.87 |     100 |   98.85 |                   
+  pedidos.js    |   98.03 |    93.75 |     100 |     100 | 88                
+  produtos.js   |    92.5 |       70 |     100 |   97.22 | 29                
+  util.js       |     100 |      100 |     100 |     100 |                   
+----------------|---------|----------|---------|---------|-------------------
+Test Suites: 4 passed, 4 total
+Tests:       62 passed, 62 total
+Snapshots:   0 total
+Time:        1.914 s
+Ran all test suites.

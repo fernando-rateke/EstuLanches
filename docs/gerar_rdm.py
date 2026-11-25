@@ -47,7 +47,7 @@ E.append(Spacer(1, 4))
 E += [secao("1. Identificação da mudança"), kv([
     ("Responsável", "Fernando Rateke Neto (Técnico de Implantação)"), ("Tipo", "Normal · Implantação inicial em produção"),
     ("Versão implantada", "<b>1.0.0</b> · imagem <font face='Courier'>estulanches:1.0.0</font>"), ("Ambiente", "Produção · Docker Engine 29.10 + Compose v5.7"),
-    ("Data", "23/11/2026"), ("Horário (BRT, UTC−3)", "Início 12:52:52 · Fim 12:53:04 (12 s)"),
+    ("Data", "25/11/2026"), ("Horário (BRT, UTC−3)", "Início 10:21:52 · Fim 10:22:04 (12 s)"),
     ("Componentes", "app: Node.js 22 (alpine) + Express 5<br/>db: PostgreSQL 16 (alpine)"), ("Risco / Impacto", "Baixo · sistema novo, sem usuários afetados"),
 ]), Spacer(1, 4)]
 
@@ -57,9 +57,11 @@ E += [secao("2. Parâmetros alterados / configurados"), grade([
     ["Porta do banco 5432", "Não publicada (rede interna <i>backend</i>)", "Banco inacessível de fora dos containers"],
     ["NODE_ENV / TZ", "production / America/Sao_Paulo", "Modo produção e horário local nos logs"],
     ["POSTGRES_DB / POSTGRES_USER", "estulanches / estulanches", "Banco e usuário da aplicação"],
-    ["POSTGRES_PASSWORD, ADMIN_TOKEN", "Definidos no .env (aleatórios, não registrados aqui)", "Segredos fora do código e do Git"],
+    ["POSTGRES_PASSWORD, CANTINA_SENHA", "Definidos no .env (aleatórios, não registrados aqui)", "Segredos fora do código e do Git"],
+    ["CANTINA_LOGIN / SESSAO_HORAS", "cantina / 8 h (um turno escolar)", "Conta da equipe criada na 1ª subida; login expira sozinho"],
+    ["Migrações do banco", "001_usuarios_e_sessoes, 002_cardapio, 003_pedidos", "Aplicadas automaticamente e registradas em schema_migrations"],
     ["DB_POOL_MAX", "10 conexões", "Limitar conexões por réplica"],
-    ["RATE_LIMIT_MAX / _PEDIDOS_MAX", "300 req/15 min · 20 pedidos/min por IP", "Proteção contra abuso e força bruta"],
+    ["RATE_LIMIT_MAX / _PEDIDOS / _LOGIN", "300 req/15 min · 20 pedidos/min · 10 logins/15 min por IP", "Proteção contra abuso e força bruta"],
     ["Limites de recursos", "app 0,5 CPU / 256 MB · db 1 CPU / 512 MB", "Evitar que um serviço derrube o host"],
     ["Hardening do container app", "read_only, cap_drop ALL, no-new-privileges, init", "Reduzir superfície de ataque"],
     ["Volume / restart / logs", "db_data persistente · unless-stopped · json-file 10 MB×3", "Persistência, auto-recuperação, rotação de log"],
@@ -67,15 +69,16 @@ E += [secao("2. Parâmetros alterados / configurados"), grade([
 
 E += [secao("3. Resultado dos testes de validação"), grade([
     ["Verificação", "Comando / evidência", "Resultado"],
-    ["Testes unitários (Jest)", "regras de pedido, validação, autenticação, config", "<b>43/43 aprovados</b>"],
-    ["Testes de integração (Jest + Supertest + PostgreSQL)", "docker compose --profile test run --rm test", "<b>19/19 aprovados</b>"],
-    ["Cobertura de código", "jest --coverage", "93,4% linhas · 86,7% ramos"],
+    ["Testes unitários (Jest)", "regras de pedido, cadastro, senhas, sessões, permissões", "<b>70/70 aprovados</b>"],
+    ["Testes de integração (Jest + Supertest + PostgreSQL)", "docker compose --profile test run --rm test", "<b>32/32 aprovados</b>"],
+    ["Cobertura de código", "jest --coverage", "92,4% linhas · 88,4% ramos"],
     ["Estado dos serviços", "docker compose ps", "app <b>Up (healthy)</b> 0.0.0.0:8080→3000 · db <b>Up (healthy)</b>"],
     ["Logs de inicialização", "docker compose logs app db", "Sem erros críticos (0 ERROR/FATAL/PANIC)¹"],
     ["Healthcheck", "GET /health", "200 {status: ok, versao: 1.0.0, banco: ok}"],
     ["Fluxo funcional (smoke)", "cardápio → pedido → status pela cantina", "OK · total calculado no servidor (R$ 30,00)"],
-    ["Segurança", "rota admin sem token · porta 5432 · FS · usuário", "401 · fechada · somente leitura · uid 1000 (node)"],
-    ["Interface web", "navegador (Playwright): pedido + tela da cantina", "OK · sem erros de JavaScript"],
+    ["Contas e permissões", "sem login · aluno na área da cantina · logout", "401 · 403 · sessão invalidada (401)"],
+    ["Segurança do ambiente", "senhas no banco · porta 5432 · FS · usuário", "só hash scrypt · fechada · somente leitura · uid 1000"],
+    ["Interface web", "navegador: cadastro, pedido, cancelamento, cantina", "OK · sem erros de JavaScript"],
 ], [.30, .38, .32], cabecalho=True),
 Paragraph("¹ Único aviso do PostgreSQL: <i>LOG: could not create IPv6 socket</i> — informativo (host sem IPv6); o banco escuta normalmente em IPv4.", sub),
 Spacer(1, 4)]

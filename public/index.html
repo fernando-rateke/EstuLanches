@@ -11,13 +11,18 @@
     <div class="marca">🥪 <strong>EstuLanches</strong> <span class="sub">Cantina Escolar</span></div>
     <nav class="abas" role="tablist">
       <button class="aba ativa" data-aba="cardapio">Cardápio</button>
-      <button class="aba" data-aba="acompanhar">Meu pedido</button>
-      <button class="aba" data-aba="cantina">Cantina</button>
+      <button class="aba so-aluno oculto" data-aba="meus">Meus pedidos</button>
+      <button class="aba so-cantina oculto" data-aba="cantina">Cantina</button>
+      <button class="aba so-visitante" data-aba="entrar">Entrar</button>
     </nav>
+    <div id="quem" class="quem oculto">
+      <span id="quem-nome"></span> <span id="quem-perfil" class="selo"></span>
+      <button id="btn-sair" class="btn mini">Sair</button>
+    </div>
   </header>
 
   <main>
-    <!-- ALUNO: cardápio e carrinho -->
+    <!-- CARDÁPIO: todo mundo vê; para pedir é preciso estar logado como aluno -->
     <section id="aba-cardapio" class="painel">
       <div class="grade">
         <div>
@@ -29,73 +34,94 @@
           <ul id="itens-carrinho" class="itens"></ul>
           <p class="total">Total: <strong id="total-carrinho">R$ 0,00</strong></p>
           <form id="form-pedido">
-            <label>Seu nome
-              <input id="cliente-nome" required minlength="2" maxlength="100" autocomplete="name">
-            </label>
             <label>Observação (opcional)
               <input id="observacao" maxlength="255" placeholder="Ex.: sem cebola">
             </label>
-            <button type="submit" class="btn primario">Fazer pedido</button>
+            <button id="btn-pedir" type="submit" class="btn primario">Fazer pedido</button>
           </form>
           <p id="msg-pedido" class="msg" role="status"></p>
         </aside>
       </div>
     </section>
 
-    <!-- ALUNO: acompanhar status -->
-    <section id="aba-acompanhar" class="painel oculto">
-      <h2>Acompanhar pedido</h2>
-      <form id="form-acompanhar" class="linha">
-        <input id="numero-pedido" type="number" min="1" placeholder="Nº do pedido" required>
-        <button class="btn primario">Consultar</button>
-      </form>
-      <div id="resultado-pedido"></div>
+    <!-- ALUNO: histórico e status dos pedidos -->
+    <section id="aba-meus" class="painel oculto">
+      <div class="linha entre">
+        <h2>Meus pedidos</h2>
+        <span class="obs">atualiza sozinho a cada 15 s</span>
+      </div>
+      <div id="lista-meus" class="fila"></div>
+      <p id="msg-meus" class="msg" role="status"></p>
     </section>
 
-    <!-- CANTINA: fila de pedidos e cardápio (requer token) -->
+    <!-- CANTINA: fila de pedidos e gestão do cardápio -->
     <section id="aba-cantina" class="painel oculto">
-      <form id="form-login" class="linha">
-        <input id="token" type="password" placeholder="Token da cantina" autocomplete="off" required>
-        <button class="btn primario">Entrar</button>
-      </form>
-      <div id="area-cantina" class="oculto">
-        <div class="linha entre">
-          <h2>Fila de pedidos</h2>
-          <div class="linha">
-            <select id="filtro-status">
-              <option value="">Todos</option>
-              <option value="recebido">Recebido</option>
-              <option value="preparando">Preparando</option>
-              <option value="pronto">Pronto</option>
-              <option value="entregue">Entregue</option>
-              <option value="cancelado">Cancelado</option>
-            </select>
-            <button id="btn-atualizar" class="btn">Atualizar</button>
-            <button id="btn-sair" class="btn">Sair</button>
-          </div>
-        </div>
-        <div id="fila-pedidos" class="fila"></div>
-
-        <h2>Gerenciar cardápio</h2>
-        <form id="form-produto" class="linha quebra">
-          <input id="p-nome" placeholder="Nome" required minlength="2" maxlength="100">
-          <input id="p-descricao" placeholder="Descrição" maxlength="255">
-          <select id="p-categoria">
-            <option value="lanche">Lanche</option>
-            <option value="salgado">Salgado</option>
-            <option value="refeicao">Refeição</option>
-            <option value="bebida">Bebida</option>
-            <option value="doce">Doce</option>
+      <div class="linha entre">
+        <h2>Fila de pedidos</h2>
+        <div class="linha">
+          <select id="filtro-status">
+            <option value="">Todos</option>
+            <option value="recebido">Recebido</option>
+            <option value="preparando">Preparando</option>
+            <option value="pronto">Pronto</option>
+            <option value="entregue">Entregue</option>
+            <option value="cancelado">Cancelado</option>
           </select>
-          <input id="p-preco" type="number" min="0.01" step="0.01" placeholder="Preço (R$)" required>
-          <button class="btn primario">Adicionar</button>
-        </form>
-        <table class="tabela">
-          <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Disponível</th></tr></thead>
-          <tbody id="tabela-produtos"></tbody>
-        </table>
+          <button id="btn-atualizar" class="btn">Atualizar</button>
+        </div>
       </div>
+      <div id="fila-pedidos" class="fila"></div>
+
+      <h2>Gerenciar cardápio</h2>
+      <form id="form-produto" class="linha quebra">
+        <input id="p-nome" placeholder="Nome" required minlength="2" maxlength="100">
+        <input id="p-descricao" placeholder="Descrição" maxlength="255">
+        <select id="p-categoria">
+          <option value="lanche">Lanche</option>
+          <option value="salgado">Salgado</option>
+          <option value="refeicao">Refeição</option>
+          <option value="bebida">Bebida</option>
+          <option value="doce">Doce</option>
+        </select>
+        <input id="p-preco" type="number" min="0.01" step="0.01" placeholder="Preço (R$)" required>
+        <button class="btn primario">Adicionar</button>
+      </form>
+      <table class="tabela">
+        <thead><tr><th>Produto</th><th>Categoria</th><th>Preço</th><th>Disponível</th></tr></thead>
+        <tbody id="tabela-produtos"></tbody>
+      </table>
       <p id="msg-cantina" class="msg" role="status"></p>
+    </section>
+
+    <!-- ENTRAR / CRIAR CONTA -->
+    <section id="aba-entrar" class="painel oculto">
+      <div class="duas">
+        <form id="form-login" class="cartao">
+          <h2>Entrar</h2>
+          <label>Matrícula
+            <input id="l-matricula" required autocomplete="username" placeholder="Ex.: 2026A0153">
+          </label>
+          <label>Senha
+            <input id="l-senha" type="password" required autocomplete="current-password">
+          </label>
+          <button class="btn primario">Entrar</button>
+          <p id="msg-login" class="msg" role="status"></p>
+        </form>
+        <form id="form-cadastro" class="cartao">
+          <h2>Primeiro acesso? Crie sua conta</h2>
+          <label>Nome
+            <input id="c-nome" required minlength="2" maxlength="100" autocomplete="name">
+          </label>
+          <label>Matrícula
+            <input id="c-matricula" required pattern="[A-Za-z0-9._\-]{3,20}" autocomplete="username">
+          </label>
+          <label>Senha (mín. 8, com letras e números)
+            <input id="c-senha" type="password" required minlength="8" maxlength="72" autocomplete="new-password">
+          </label>
+          <button class="btn primario">Criar conta</button>
+          <p id="msg-cadastro" class="msg" role="status"></p>
+        </form>
+      </div>
     </section>
   </main>
 

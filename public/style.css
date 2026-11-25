@@ -50,3 +50,9 @@ form .btn.primario { width: 100%; } .linha .btn.primario { width: auto; }
 .tabela th, .tabela td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--borda); font-size: .9rem; }
 .tabela input[type=checkbox] { width: auto; }
 .rodape { text-align: center; color: var(--suave); font-size: .8rem; padding: 24px; }
+.quem { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
+.selo.aluno { background: #e7f5ff; color: #1864ab; } .selo.cantina { background: #fff0e6; color: #d9480f; }
+.duas { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; max-width: 760px; }
+.cartao { background: var(--card); border: 1px solid var(--borda); border-radius: 12px; padding: 18px; }
+.cartao h2 { margin-top: 0; }
+.btn:disabled { opacity: .5; cursor: wait; }

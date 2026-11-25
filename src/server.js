@@ -19,7 +19,7 @@ async function iniciar() {
   const pool = criarPool(config.db);
   await aguardarBanco(pool);
   logger.info('Conectado ao PostgreSQL', { host: process.env.PGHOST, banco: process.env.PGDATABASE });
-  await migrar(pool);
+  await migrar(pool, { contaCantina: config.cantina });
 
   const app = criarApp({ pool, config });
   const servidor = app.listen(config.porta, () => {

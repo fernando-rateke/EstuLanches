@@ -1,107 +1,162 @@
-PASS tests/integration/api.test.js
-  saúde e segurança
-    ✓ GET /health responde ok com banco conectado (30 ms)
-    ✓ envia cabeçalhos de segurança (helmet) e esconde X-Powered-By (8 ms)
-    ✓ serve o frontend (11 ms)
-    ✓ rotas da cantina exigem token (28 ms)
-    ✓ JSON inválido retorna 400 sem stack trace (8 ms)
-    ✓ tentativa de SQL injection no id é rejeitada (9 ms)
-    ✓ rota inexistente retorna 404 (10 ms)
-  cardápio (produtos)
-    ✓ cria, lista, edita e remove produto (24 ms)
-    ✓ produto indisponível some do cardápio público, mas aparece para a cantina (18 ms)
-    ✓ valida os dados do produto (9 ms)
-    ✓ não permite remover produto que já está em pedido (409) (25 ms)
+PASS tests/integration/api.test.js (6.709 s)
+  saúde e cabeçalhos
+    ✓ GET /health responde ok com banco conectado (83 ms)
+    ✓ envia cabeçalhos de segurança (helmet) e esconde X-Powered-By (80 ms)
+    ✓ serve o frontend (79 ms)
+    ✓ migrações ficam registradas na tabela schema_migrations (68 ms)
+    ✓ JSON inválido -> 400 sem stack trace (73 ms)
+    ✓ rota inexistente -> 404 (82 ms)
+  contas e login
+    ✓ cadastro cria aluno, já devolve sessão e nunca devolve a senha (123 ms)
+    ✓ não dá para se cadastrar como cantina (114 ms)
+    ✓ matrícula repetida -> 409 (184 ms)
+    ✓ cadastro inválido -> 400 com detalhes (113 ms)
+    ✓ login com senha errada ou matrícula inexistente -> mesma mensagem 401 (262 ms)
+    ✓ GET /eu mostra quem está logado; sem login -> 401 (146 ms)
+    ✓ logout desliga a sessão na hora (148 ms)
+    ✓ sessão vencida não funciona (137 ms)
+    ✓ banco guarda só o hash do código de sessão (115 ms)
+  permissões
+    ✓ sem login não se gerencia nada (71 ms)
+    ✓ aluno não acessa a área da cantina -> 403 (139 ms)
+    ✓ aluno NÃO vê pedido de outro aluno (291 ms)
+    ✓ tentativa de SQL injection no id é rejeitada (59 ms)
+  cardápio
+    ✓ cantina cria, edita e remove produto; público vê o cardápio (142 ms)
+    ✓ produto indisponível some do cardápio público, mas a cantina continua vendo (166 ms)
+    ✓ não remove produto que já está em pedido -> 409 (194 ms)
   pedidos
-    ✓ fluxo completo: aluno pede -> cantina prepara -> pronto -> entregue (50 ms)
-    ✓ o total é calculado no servidor (ignora preço enviado pelo cliente) (17 ms)
-    ✓ preço do pedido fica congelado mesmo se o cardápio mudar (19 ms)
-    ✓ não aceita produto indisponível nem inexistente (16 ms)
-    ✓ bloqueia transição de status inválida (409) (22 ms)
-    ✓ cantina lista e filtra a fila por status (62 ms)
-    ✓ pedido inexistente retorna 404 (9 ms)
+    ✓ fluxo completo: aluno pede -> cantina prepara -> pronto -> entregue (263 ms)
+    ✓ cantina não faz pedido em nome de aluno -> 403 (192 ms)
+    ✓ o total é calculado no servidor (ignora preço e nome enviados) (194 ms)
+    ✓ preço do pedido fica congelado mesmo se o cardápio mudar (191 ms)
+    ✓ produto indisponível ou inexistente -> 422 e nada é gravado (200 ms)
+    ✓ aluno cancela enquanto "recebido"; depois que a cantina começa, não (330 ms)
+    ✓ bloqueia transição de status inválida (311 ms)
+    ✓ cantina lista e filtra a fila por status (425 ms)
   limite de requisições (rate limit)
-    ✓ bloqueia excesso de pedidos com 429 (26 ms)
+    ✓ bloqueia tentativas repetidas de login com 429 (força bruta) (297 ms)
+    ✓ bloqueia excesso de pedidos com 429 (229 ms)
+
+PASS tests/unit/seguranca.test.js
+  senhas (scrypt)
+    ✓ nunca guarda a senha em texto (56 ms)
+    ✓ confere a senha certa e recusa a errada (153 ms)
+    ✓ mesma senha gera hashes diferentes (sal aleatório) (112 ms)
+    ✓ hash guardado inválido ("") nunca é aceito (1 ms)
+    ✓ hash guardado inválido ("texto-qualquer") nunca é aceito
+    ✓ hash guardado inválido ("scrypt$abc") nunca é aceito
+    ✓ hash guardado inválido (null) nunca é aceito
+    ✓ hash guardado inválido ("scrypt$00$00") nunca é aceito (1 ms)
+  código de sessão
+    ✓ é aleatório e longo (1 ms)
+    ✓ o banco guarda só o SHA-256 (64 hex), sempre igual para o mesmo código
+  middleware exigirLogin
+    ✓ sem cabeçalho -> 401 sem consultar o banco (2 ms)
+    ✓ esquema errado -> 401 sem consultar o banco
+    ✓ só "Bearer" -> 401 sem consultar o banco
+    ✓ sessão inexistente ou vencida -> 401 (1 ms)
+    ✓ sessão válida -> preenche req.usuario e segue (1 ms)
+    ✓ lerCodigo extrai o código do cabeçalho (1 ms)
+  middleware exigirPerfil
+    ✓ aluno tentando área da cantina -> 403 (1 ms)
+    ✓ perfil certo -> segue (1 ms)
+  config
+    ✓ lê variáveis de ambiente com valores padrão (1 ms)
+    ✓ em produção exige senha forte para a cantina (1 ms)
+    ✓ recusa duração de sessão absurda
 
 PASS tests/unit/pedido.test.js
-  ✓ formatarReais formata em BRL (30 ms)
+  ✓ formatarReais formata em BRL (429 ms)
   calcularTotal
     ✓ soma preço × quantidade de cada item, em centavos (1 ms)
-    ✓ não sofre erro de ponto flutuante (centavos inteiros)
-    ✓ rejeita produto inexistente com 422 (6 ms)
+    ✓ não sofre erro de ponto flutuante (centavos inteiros) (1 ms)
+    ✓ rejeita produto inexistente com 422 (4 ms)
     ✓ rejeita produto indisponível (1 ms)
   validarPedido
-    ✓ aceita pedido válido e normaliza o nome (1 ms)
+    ✓ aceita pedido válido e limpa espaços da observação (1 ms)
+    ✓ ignora nome enviado pelo navegador (o nome vem da conta logada) (1 ms)
     ✓ agrupa itens repetidos do mesmo produto
-    ✓ rejeita sem nome (1 ms)
+    ✓ rejeita observação longa demais (1 ms)
     ✓ rejeita sem itens
-    ✓ rejeita itens não é lista
+    ✓ rejeita itens não é lista (1 ms)
     ✓ rejeita quantidade zero
-    ✓ rejeita quantidade fracionada
-    ✓ rejeita produto_id texto
+    ✓ rejeita quantidade fracionada (1 ms)
+    ✓ rejeita produto_id texto (1 ms)
     ✓ rejeita soma acima do limite
-    ✓ rejeita corpo nulo
-    ✓ rejeita mais de 20 itens (1 ms)
+    ✓ rejeita corpo nulo (1 ms)
+    ✓ rejeita mais de 20 itens
   podeTransitar (fluxo do pedido)
-    ✓ recebido -> preparando = true (1 ms)
-    ✓ preparando -> pronto = true
-    ✓ pronto -> entregue = true (1 ms)
+    ✓ recebido -> preparando = true
+    ✓ preparando -> pronto = true (3 ms)
+    ✓ pronto -> entregue = true
     ✓ recebido -> cancelado = true (1 ms)
     ✓ preparando -> cancelado = true
     ✓ recebido -> entregue = false
     ✓ pronto -> cancelado = false (1 ms)
     ✓ entregue -> recebido = false
     ✓ cancelado -> preparando = false
-    ✓ inexistente -> pronto = false
+    ✓ inexistente -> pronto = false (1 ms)
+  alunoPodeCancelar
+    ✓ só enquanto o pedido está "recebido"
 
-PASS tests/unit/seguranca.test.js
-  exigirAdmin
-    ✓ permite com o token correto (7 ms)
-    ✓ bloqueia sem cabeçalho com 401 (3 ms)
-    ✓ bloqueia token errado com 401 (3 ms)
-    ✓ bloqueia esquema errado com 401 (3 ms)
-    ✓ bloqueia só o esquema com 401 (2 ms)
-    ✓ bloqueia tudo se o token não foi configurado (4 ms)
-  config
-    ✓ lê variáveis de ambiente com valores padrão (1 ms)
-    ✓ em produção exige ADMIN_TOKEN forte (1 ms)
+PASS tests/unit/usuario.test.js
+  ✓ usuarioPublico nunca devolve a senha (1 ms)
+  validarCadastro
+    ✓ aceita cadastro válido e normaliza nome e matrícula (1 ms)
+    ✓ rejeita nome curto
+    ✓ rejeita matrícula com espaço
+    ✓ rejeita matrícula com símbolo perigoso
+    ✓ rejeita senha curta
+    ✓ rejeita senha só com letras
+    ✓ rejeita senha só com números (1 ms)
+    ✓ rejeita senha contendo a matrícula
+    ✓ rejeita corpo vazio
+  validarLogin
+    ✓ exige matrícula e senha, sem dizer qual faltou (1 ms)
+    ✓ matrícula não diferencia maiúsculas
 
 PASS tests/unit/produto.test.js
   validarProduto
     ✓ aceita produto válido (1 ms)
     ✓ rejeita nome curto
     ✓ rejeita categoria inválida
-    ✓ rejeita preço negativo (1 ms)
-    ✓ rejeita preço decimal (deve ser centavos)
-    ✓ rejeita preço como texto
-    ✓ rejeita disponivel não booleano
+    ✓ rejeita preço negativo
+    ✓ rejeita preço decimal (deve ser centavos) (1 ms)
+    ✓ rejeita preço como texto (1 ms)
+    ✓ rejeita disponivel não booleano (1 ms)
     ✓ edição parcial valida só os campos enviados (1 ms)
     ✓ edição parcial ignora campos desconhecidos (proteção contra mass assignment) (1 ms)
 
 ----------------|---------|----------|---------|---------|-------------------
 File            | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s 
 ----------------|---------|----------|---------|---------|-------------------
-All files       |   90.84 |     86.7 |   89.09 |   93.43 |                   
- src            |   78.88 |    56.66 |    62.5 |   84.33 |                   
-  app.js        |   96.66 |      100 |     100 |   96.66 | 32                
-  config.js     |     100 |     92.3 |     100 |     100 | 14                
+All files       |    90.2 |    88.35 |   91.35 |   92.42 |                   
+ src            |   73.01 |    59.09 |   68.18 |   77.67 |                   
+  app.js        |   97.29 |      100 |     100 |   97.29 | 47                
+  config.js     |     100 |    94.73 |     100 |     100 | 15                
   db.js         |   57.69 |     37.5 |      40 |   68.18 | 18-25             
   logger.js     |      40 |       20 |      50 |    37.5 | 10-12,17-18       
-  migrate.js    |   93.33 |       25 |      50 |     100 | 12-17             
- src/domain     |   97.61 |    95.65 |     100 |    97.4 |                   
+  migrate.js    |    61.9 |    33.33 |   71.42 |   65.71 | 38-46,62-68       
+ src/domain     |   99.08 |    96.69 |     100 |   99.01 |                   
   erros.js      |     100 |      100 |     100 |     100 |                   
-  pedido.js     |   97.87 |    97.77 |     100 |   97.56 | 37                
+  pedido.js     |     100 |      100 |     100 |     100 |                   
   produto.js    |   96.96 |    93.61 |     100 |   96.87 | 30                
- src/middleware |   90.62 |    88.88 |     100 |   92.59 |                   
+  usuario.js    |     100 |    97.14 |     100 |     100 | 36                
+ src/middleware |    92.5 |    91.66 |     100 |   94.11 |                   
   auth.js       |     100 |      100 |     100 |     100 |                   
   erros.js      |   85.71 |       80 |     100 |   88.23 | 20-21             
- src/routes     |      96 |    87.87 |     100 |   98.85 |                   
-  pedidos.js    |   98.03 |    93.75 |     100 |     100 | 88                
+ src/routes     |   96.52 |    90.19 |     100 |   98.46 |                   
+  auth.js       |   97.22 |     87.5 |     100 |   97.05 | 49                
+  pedidos.js    |    98.3 |    96.15 |     100 |     100 | 124               
   produtos.js   |    92.5 |       70 |     100 |   97.22 | 29                
   util.js       |     100 |      100 |     100 |     100 |                   
+ src/seguranca  |     100 |      100 |     100 |     100 |                   
+  senha.js      |     100 |      100 |     100 |     100 |                   
+  sessao.js     |     100 |      100 |     100 |     100 |                   
 ----------------|---------|----------|---------|---------|-------------------
-Test Suites: 4 passed, 4 total
-Tests:       62 passed, 62 total
+Test Suites: 5 passed, 5 total
+Tests:       102 passed, 102 total
 Snapshots:   0 total
-Time:        1.914 s
+Time:        8.018 s
 Ran all test suites.

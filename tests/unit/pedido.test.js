@@ -2,6 +2,7 @@
 
 const {
   podeTransitar,
+  alunoPodeCancelar,
   validarPedido,
   calcularTotal,
   formatarReais,
@@ -40,31 +41,36 @@ describe('calcularTotal', () => {
 });
 
 describe('validarPedido', () => {
-  const valido = { cliente_nome: '  Ana  ', itens: [{ produto_id: 1, quantidade: 2 }] };
+  const valido = { observacao: '  sem cebola  ', itens: [{ produto_id: 1, quantidade: 2 }] };
 
-  test('aceita pedido válido e normaliza o nome', () => {
+  test('aceita pedido válido e limpa espaços da observação', () => {
     const { erros, dados } = validarPedido(valido);
     expect(erros).toEqual([]);
-    expect(dados.cliente_nome).toBe('Ana');
+    expect(dados.observacao).toBe('sem cebola');
+  });
+
+  test('ignora nome enviado pelo navegador (o nome vem da conta logada)', () => {
+    const { dados } = validarPedido({ ...valido, cliente_nome: 'Outra Pessoa' });
+    expect(dados).not.toHaveProperty('cliente_nome');
   });
 
   test('agrupa itens repetidos do mesmo produto', () => {
-    const { dados } = validarPedido({ cliente_nome: 'Ana', itens: [
+    const { dados } = validarPedido({ itens: [
       { produto_id: 1, quantidade: 2 }, { produto_id: 1, quantidade: 3 }, { produto_id: 2, quantidade: 1 },
     ] });
     expect(dados.itens).toEqual([{ produto_id: 1, quantidade: 5 }, { produto_id: 2, quantidade: 1 }]);
   });
 
   test.each([
-    ['sem nome', { itens: valido.itens }, /cliente_nome/],
-    ['sem itens', { cliente_nome: 'Ana', itens: [] }, /itens/],
-    ['itens não é lista', { cliente_nome: 'Ana', itens: 'x' }, /itens/],
-    ['quantidade zero', { cliente_nome: 'Ana', itens: [{ produto_id: 1, quantidade: 0 }] }, /quantidade/],
-    ['quantidade fracionada', { cliente_nome: 'Ana', itens: [{ produto_id: 1, quantidade: 1.5 }] }, /quantidade/],
-    ['produto_id texto', { cliente_nome: 'Ana', itens: [{ produto_id: '1; DROP TABLE', quantidade: 1 }] }, /produto_id/],
-    ['soma acima do limite', { cliente_nome: 'Ana', itens: [
+    ['observação longa demais', { ...valido, observacao: 'x'.repeat(256) }, /observacao/],
+    ['sem itens', { itens: [] }, /itens/],
+    ['itens não é lista', { itens: 'x' }, /itens/],
+    ['quantidade zero', { itens: [{ produto_id: 1, quantidade: 0 }] }, /quantidade/],
+    ['quantidade fracionada', { itens: [{ produto_id: 1, quantidade: 1.5 }] }, /quantidade/],
+    ['produto_id texto', { itens: [{ produto_id: '1; DROP TABLE', quantidade: 1 }] }, /produto_id/],
+    ['soma acima do limite', { itens: [
       { produto_id: 1, quantidade: 15 }, { produto_id: 1, quantidade: 15 }] }, /excede/],
-    ['corpo nulo', null, /cliente_nome/],
+    ['corpo nulo', null, /itens/],
   ])('rejeita %s', (_, entrada, regex) => {
     const { erros } = validarPedido(entrada);
     expect(erros.join(' ')).toMatch(regex);
@@ -72,7 +78,7 @@ describe('validarPedido', () => {
 
   test('rejeita mais de 20 itens', () => {
     const itens = Array.from({ length: 21 }, (_, i) => ({ produto_id: i + 1, quantidade: 1 }));
-    expect(validarPedido({ cliente_nome: 'Ana', itens }).erros.join(' ')).toMatch(/no máximo 20/);
+    expect(validarPedido({ itens }).erros.join(' ')).toMatch(/no máximo 20/);
   });
 });
 
@@ -90,6 +96,13 @@ describe('podeTransitar (fluxo do pedido)', () => {
     ['inexistente', 'pronto', false],
   ])('%s -> %s = %s', (de, para, esperado) => {
     expect(podeTransitar(de, para)).toBe(esperado);
+  });
+});
+
+describe('alunoPodeCancelar', () => {
+  test('só enquanto o pedido está "recebido"', () => {
+    expect(alunoPodeCancelar('recebido')).toBe(true);
+    for (const s of ['preparando', 'pronto', 'entregue', 'cancelado']) expect(alunoPodeCancelar(s)).toBe(false);
   });
 });
 

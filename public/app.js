@@ -1,34 +1,45 @@
 'use strict';
 
-// Frontend do EstuLanches (JavaScript puro, sem frameworks).
-// Segurança: todo texto vindo da API é inserido com textContent (nunca innerHTML),
-// o que impede injeção de HTML/JS (XSS).
+// =====================================================================
+// Frontend do EstuLanches (JavaScript puro, sem frameworks)
+//
+// Segurança:
+//  - todo texto vindo da API entra na tela com textContent (nunca innerHTML),
+//    então ninguém consegue injetar HTML/JS (XSS);
+//  - o código de sessão fica no sessionStorage: some ao fechar a aba.
+// =====================================================================
 
 const $ = (sel) => document.querySelector(sel);
 const reais = (c) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const CATEGORIAS = { lanche: 'Lanches', salgado: 'Salgados', refeicao: 'Refeições', bebida: 'Bebidas', doce: 'Doces' };
 const PROXIMOS = { recebido: ['preparando', 'cancelado'], preparando: ['pronto', 'cancelado'], pronto: ['entregue'] };
+const CHAVE = 'estulanches_sessao';
 
-const carrinho = new Map(); // produto_id -> { produto, quantidade }
-let token = sessionStorage.getItem('estulanches_token') || '';
+const estado = {
+  token: sessionStorage.getItem(CHAVE) || '',
+  usuario: null,          // { id, nome, matricula, perfil }
+  carrinho: new Map(),    // produto_id -> { produto, quantidade }
+  timer: null,            // atualização automática
+};
 
+// ---------- utilitários ----------
 function el(tag, props = {}, ...filhos) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(props)) {
     if (k === 'class') e.className = v;
     else if (k === 'text') e.textContent = v;
-    else if (k.startsWith('data-')) e.setAttribute(k, v);
     else e[k] = v;
   }
   filhos.flat().forEach((f) => f != null && e.append(f));
   return e;
 }
 
-async function api(caminho, { metodo = 'GET', corpo, admin = false } = {}) {
+async function api(caminho, { metodo = 'GET', corpo } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (admin) headers.Authorization = `Bearer ${token}`;
+  if (estado.token) headers.Authorization = `Bearer ${estado.token}`;
   const resp = await fetch(caminho, { method: metodo, headers, body: corpo ? JSON.stringify(corpo) : undefined });
   const dados = resp.status === 204 ? null : await resp.json().catch(() => null);
+  if (resp.status === 401 && estado.usuario) sairLocal(); // sessão expirou
   if (!resp.ok) {
     const detalhes = dados && dados.detalhes ? `: ${dados.detalhes.join('; ')}` : '';
     const erro = new Error(((dados && dados.erro) || `erro ${resp.status}`) + detalhes);
@@ -44,17 +55,78 @@ function mensagem(seletor, texto, tipo = 'ok') {
   m.className = `msg ${tipo}`;
 }
 
-// ---------- Abas ----------
-document.querySelectorAll('.aba').forEach((botao) =>
-  botao.addEventListener('click', () => {
-    document.querySelectorAll('.aba').forEach((b) => b.classList.toggle('ativa', b === botao));
-    document.querySelectorAll('.painel').forEach((p) => p.classList.add('oculto'));
-    $(`#aba-${botao.dataset.aba}`).classList.remove('oculto');
-    if (botao.dataset.aba === 'cantina' && token) entrarCantina();
-  }),
-);
+// ---------- abas ----------
+function abrirAba(nome) {
+  document.querySelectorAll('.aba').forEach((b) => b.classList.toggle('ativa', b.dataset.aba === nome));
+  document.querySelectorAll('.painel').forEach((p) => p.classList.toggle('oculto', p.id !== `aba-${nome}`));
+  clearInterval(estado.timer);
+  if (nome === 'meus') { carregarMeus(); estado.timer = setInterval(carregarMeus, 15000); }
+  if (nome === 'cantina') { carregarFila(); carregarProdutosAdmin(); estado.timer = setInterval(carregarFila, 15000); }
+}
+document.querySelectorAll('.aba').forEach((b) => b.addEventListener('click', () => abrirAba(b.dataset.aba)));
 
-// ---------- Cardápio e carrinho (aluno) ----------
+// ---------- sessão ----------
+function aplicarUsuario() {
+  const u = estado.usuario;
+  const perfil = u ? u.perfil : 'visitante';
+  document.querySelectorAll('.so-aluno').forEach((e) => e.classList.toggle('oculto', perfil !== 'aluno'));
+  document.querySelectorAll('.so-cantina').forEach((e) => e.classList.toggle('oculto', perfil !== 'cantina'));
+  document.querySelectorAll('.so-visitante').forEach((e) => e.classList.toggle('oculto', perfil !== 'visitante'));
+  $('#quem').classList.toggle('oculto', !u);
+  if (u) {
+    $('#quem-nome').textContent = u.nome;
+    $('#quem-perfil').textContent = u.perfil;
+    $('#quem-perfil').className = `selo ${u.perfil}`;
+  }
+  $('#form-pedido').classList.toggle('oculto', perfil === 'cantina');
+  $('#btn-pedir').textContent = perfil === 'aluno' ? 'Fazer pedido' : 'Entre para pedir';
+}
+
+function guardarSessao({ token, usuario }) {
+  estado.token = token;
+  estado.usuario = usuario;
+  sessionStorage.setItem(CHAVE, token);
+  aplicarUsuario();
+  abrirAba(usuario.perfil === 'cantina' ? 'cantina' : 'cardapio');
+}
+
+function sairLocal() {
+  estado.token = '';
+  estado.usuario = null;
+  sessionStorage.removeItem(CHAVE);
+  aplicarUsuario();
+  abrirAba('cardapio');
+}
+
+$('#form-login').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try {
+    const r = await api('/api/auth/login', { metodo: 'POST', corpo: { matricula: $('#l-matricula').value, senha: $('#l-senha').value } });
+    ev.target.reset();
+    mensagem('#msg-login', '');
+    guardarSessao(r);
+  } catch (e) { mensagem('#msg-login', e.message, 'erro'); }
+});
+
+$('#form-cadastro').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  try {
+    const r = await api('/api/auth/cadastro', {
+      metodo: 'POST',
+      corpo: { nome: $('#c-nome').value, matricula: $('#c-matricula').value, senha: $('#c-senha').value },
+    });
+    ev.target.reset();
+    mensagem('#msg-cadastro', '');
+    guardarSessao(r);
+  } catch (e) { mensagem('#msg-cadastro', e.message, 'erro'); }
+});
+
+$('#btn-sair').addEventListener('click', async () => {
+  await api('/api/auth/logout', { metodo: 'POST' }).catch(() => {});
+  sairLocal();
+});
+
+// ---------- cardápio e carrinho ----------
 async function carregarCardapio() {
   const lista = $('#lista-produtos');
   try {
@@ -67,14 +139,11 @@ async function carregarCardapio() {
         lista.append(el('h3', { class: 'categoria', text: CATEGORIAS[p.categoria] || p.categoria }));
       }
       const botao = el('button', { class: 'btn primario mini', text: 'Adicionar' });
-      botao.addEventListener('click', () => adicionar(p));
-      lista.append(
-        el('div', { class: 'produto' },
-          el('span', { class: 'nome', text: p.nome }),
-          el('span', { class: 'desc', text: p.descricao }),
-          el('div', { class: 'rodape-card' }, el('span', { class: 'preco', text: reais(p.preco_centavos) }), botao),
-        ),
-      );
+      botao.addEventListener('click', () => mudarQuantidade(p, +1));
+      lista.append(el('div', { class: 'produto' },
+        el('span', { class: 'nome', text: p.nome }),
+        el('span', { class: 'desc', text: p.descricao }),
+        el('div', { class: 'rodape-card' }, el('span', { class: 'preco', text: reais(p.preco_centavos) }), botao)));
     }
     if (!produtos.length) lista.append(el('p', { text: 'Nenhum produto disponível no momento.' }));
   } catch (e) {
@@ -82,19 +151,11 @@ async function carregarCardapio() {
   }
 }
 
-function adicionar(produto) {
-  const item = carrinho.get(produto.id) || { produto, quantidade: 0 };
-  if (item.quantidade >= 20) return;
-  item.quantidade += 1;
-  carrinho.set(produto.id, item);
-  desenharCarrinho();
-}
-
-function remover(id) {
-  const item = carrinho.get(id);
-  if (!item) return;
-  item.quantidade -= 1;
-  if (item.quantidade <= 0) carrinho.delete(id);
+function mudarQuantidade(produto, delta) {
+  const item = estado.carrinho.get(produto.id) || { produto, quantidade: 0 };
+  item.quantidade = Math.min(20, item.quantidade + delta);
+  if (item.quantidade <= 0) estado.carrinho.delete(produto.id);
+  else estado.carrinho.set(produto.id, item);
   desenharCarrinho();
 }
 
@@ -102,125 +163,109 @@ function desenharCarrinho() {
   const ul = $('#itens-carrinho');
   ul.replaceChildren();
   let total = 0;
-  for (const { produto, quantidade } of carrinho.values()) {
+  for (const { produto, quantidade } of estado.carrinho.values()) {
     total += produto.preco_centavos * quantidade;
     const menos = el('button', { class: 'btn mini', text: '−', title: 'Remover um' });
-    menos.addEventListener('click', () => remover(produto.id));
+    menos.addEventListener('click', () => mudarQuantidade(produto, -1));
     ul.append(el('li', {}, el('span', { text: `${quantidade}× ${produto.nome}` }),
       el('span', {}, reais(produto.preco_centavos * quantidade), ' ', menos)));
   }
-  if (!carrinho.size) ul.append(el('li', { class: 'vazio', text: 'Nenhum item ainda.' }));
+  if (!estado.carrinho.size) ul.append(el('li', { class: 'vazio', text: 'Nenhum item ainda.' }));
   $('#total-carrinho').textContent = reais(total);
 }
 
 $('#form-pedido').addEventListener('submit', async (ev) => {
   ev.preventDefault();
-  if (!carrinho.size) return mensagem('#msg-pedido', 'Adicione pelo menos um item.', 'erro');
+  if (!estado.usuario) return abrirAba('entrar');
+  if (!estado.carrinho.size) return mensagem('#msg-pedido', 'Adicione pelo menos um item.', 'erro');
   try {
     const pedido = await api('/api/pedidos', {
       metodo: 'POST',
       corpo: {
-        cliente_nome: $('#cliente-nome').value,
         observacao: $('#observacao').value,
-        itens: [...carrinho.values()].map((i) => ({ produto_id: i.produto.id, quantidade: i.quantidade })),
+        itens: [...estado.carrinho.values()].map((i) => ({ produto_id: i.produto.id, quantidade: i.quantidade })),
       },
     });
-    carrinho.clear();
+    estado.carrinho.clear();
     desenharCarrinho();
     $('#observacao').value = '';
-    mensagem('#msg-pedido', `Pedido nº ${pedido.id} recebido! Total ${reais(pedido.total_centavos)}. Guarde o número.`);
-    $('#numero-pedido').value = pedido.id;
-  } catch (e) {
-    mensagem('#msg-pedido', e.message, 'erro');
-  }
+    mensagem('#msg-pedido', `Pedido nº ${pedido.id} enviado! Total ${reais(pedido.total_centavos)}. Acompanhe em "Meus pedidos".`);
+  } catch (e) { mensagem('#msg-pedido', e.message, 'erro'); }
 });
 
-// ---------- Acompanhar pedido (aluno) ----------
+// ---------- cartão de pedido (usado pelo aluno e pela cantina) ----------
 function cartaoPedido(p, acoes = []) {
   return el('div', { class: 'pedido' },
     el('h3', {}, el('span', { text: `#${p.id} · ${p.cliente_nome}` }), el('span', { class: `selo ${p.status}`, text: p.status })),
     el('ul', {}, p.itens.map((i) => el('li', { text: `${i.quantidade}× ${i.nome} (${reais(i.preco_unitario_centavos)})` }))),
     p.observacao ? el('p', { class: 'obs', text: `Obs.: ${p.observacao}` }) : null,
     el('p', {}, el('strong', { text: reais(p.total_centavos) }), ' · ',
-      el('span', { class: 'obs', text: new Date(p.criado_em).toLocaleTimeString('pt-BR') })),
-    acoes.length ? el('div', { class: 'acoes' }, acoes) : null,
-  );
+      el('span', { class: 'obs', text: new Date(p.criado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) })),
+    acoes.length ? el('div', { class: 'acoes' }, acoes) : null);
 }
 
-$('#form-acompanhar').addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  const alvo = $('#resultado-pedido');
+function botao(texto, classe, acao, msg) {
+  const b = el('button', { class: classe, text: texto });
+  b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await acao(); } catch (e) { mensagem(msg, e.message, 'erro'); b.disabled = false; }
+  });
+  return b;
+}
+
+// ---------- aluno: meus pedidos ----------
+async function carregarMeus() {
+  if (!estado.usuario) return;
   try {
-    const p = await api(`/api/pedidos/${encodeURIComponent($('#numero-pedido').value)}`);
-    alvo.replaceChildren(cartaoPedido(p));
-  } catch (e) {
-    alvo.replaceChildren(el('p', { class: 'msg erro', text: e.message }));
-  }
-});
+    const pedidos = await api('/api/pedidos/meus');
+    const lista = $('#lista-meus');
+    lista.replaceChildren();
+    for (const p of pedidos) {
+      const acoes = p.status === 'recebido'
+        ? [botao('Cancelar pedido', 'btn mini', async () => {
+          await api(`/api/pedidos/${p.id}/cancelar`, { metodo: 'POST' });
+          carregarMeus();
+        }, '#msg-meus')]
+        : [];
+      lista.append(cartaoPedido(p, acoes));
+    }
+    if (!pedidos.length) lista.append(el('p', { class: 'obs', text: 'Você ainda não fez pedidos.' }));
+  } catch (e) { mensagem('#msg-meus', e.message, 'erro'); }
+}
 
-// ---------- Cantina (admin) ----------
-$('#form-login').addEventListener('submit', (ev) => {
-  ev.preventDefault();
-  token = $('#token').value;
-  $('#token').value = '';
-  entrarCantina();
-});
-
-$('#btn-sair').addEventListener('click', () => {
-  token = '';
-  sessionStorage.removeItem('estulanches_token');
-  $('#area-cantina').classList.add('oculto');
-  $('#form-login').classList.remove('oculto');
-});
-
+// ---------- cantina: fila e cardápio ----------
 $('#btn-atualizar').addEventListener('click', () => carregarFila());
 $('#filtro-status').addEventListener('change', () => carregarFila());
 
-async function entrarCantina() {
-  try {
-    await carregarFila();
-    sessionStorage.setItem('estulanches_token', token);
-    $('#form-login').classList.add('oculto');
-    $('#area-cantina').classList.remove('oculto');
-    mensagem('#msg-cantina', '');
-    carregarProdutosAdmin();
-  } catch (e) {
-    token = '';
-    sessionStorage.removeItem('estulanches_token');
-    mensagem('#msg-cantina', e.status === 401 ? 'Token inválido.' : e.message, 'erro');
-  }
-}
-
 async function carregarFila() {
-  const status = $('#filtro-status').value;
-  const pedidos = await api(`/api/pedidos${status ? `?status=${status}` : ''}`, { admin: true });
-  const fila = $('#fila-pedidos');
-  fila.replaceChildren();
-  for (const p of pedidos) {
-    const acoes = (PROXIMOS[p.status] || []).map((novo) => {
-      const b = el('button', { class: novo === 'cancelado' ? 'btn mini' : 'btn primario mini', text: `→ ${novo}` });
-      b.addEventListener('click', async () => {
-        try {
-          await api(`/api/pedidos/${p.id}/status`, { metodo: 'PATCH', corpo: { status: novo }, admin: true });
+  if (!estado.usuario || estado.usuario.perfil !== 'cantina') return;
+  try {
+    const status = $('#filtro-status').value;
+    const pedidos = await api(`/api/pedidos${status ? `?status=${status}` : ''}`);
+    const fila = $('#fila-pedidos');
+    fila.replaceChildren();
+    for (const p of pedidos) {
+      const acoes = (PROXIMOS[p.status] || []).map((novo) => botao(`→ ${novo}`,
+        novo === 'cancelado' ? 'btn mini' : 'btn primario mini', async () => {
+          await api(`/api/pedidos/${p.id}/status`, { metodo: 'PATCH', corpo: { status: novo } });
           carregarFila();
-        } catch (e) { mensagem('#msg-cantina', e.message, 'erro'); }
-      });
-      return b;
-    });
-    fila.append(cartaoPedido(p, acoes));
-  }
-  if (!pedidos.length) fila.append(el('p', { class: 'obs', text: 'Nenhum pedido.' }));
+        }, '#msg-cantina'));
+      fila.append(cartaoPedido(p, acoes));
+    }
+    if (!pedidos.length) fila.append(el('p', { class: 'obs', text: 'Nenhum pedido.' }));
+  } catch (e) { mensagem('#msg-cantina', e.message, 'erro'); }
 }
 
 async function carregarProdutosAdmin() {
-  const produtos = await api('/api/produtos/todos', { admin: true });
+  if (!estado.usuario || estado.usuario.perfil !== 'cantina') return;
+  const produtos = await api('/api/produtos/todos');
   const tbody = $('#tabela-produtos');
   tbody.replaceChildren();
   for (const p of produtos) {
     const chk = el('input', { type: 'checkbox', checked: p.disponivel, title: 'Disponível no cardápio' });
     chk.addEventListener('change', async () => {
       try {
-        await api(`/api/produtos/${p.id}`, { metodo: 'PATCH', corpo: { disponivel: chk.checked }, admin: true });
+        await api(`/api/produtos/${p.id}`, { metodo: 'PATCH', corpo: { disponivel: chk.checked } });
         carregarCardapio();
       } catch (e) { chk.checked = !chk.checked; mensagem('#msg-cantina', e.message, 'erro'); }
     });
@@ -234,7 +279,6 @@ $('#form-produto').addEventListener('submit', async (ev) => {
   try {
     await api('/api/produtos', {
       metodo: 'POST',
-      admin: true,
       corpo: {
         nome: $('#p-nome').value,
         descricao: $('#p-descricao').value,
@@ -249,7 +293,14 @@ $('#form-produto').addEventListener('submit', async (ev) => {
   } catch (e) { mensagem('#msg-cantina', e.message, 'erro'); }
 });
 
-// ---------- Início ----------
-fetch('/health').then((r) => r.json()).then((h) => { $('#versao').textContent = `v${h.versao}`; }).catch(() => {});
-carregarCardapio();
-desenharCarrinho();
+// ---------- início ----------
+async function iniciar() {
+  fetch('/health').then((r) => r.json()).then((h) => { $('#versao').textContent = `v${h.versao}`; }).catch(() => {});
+  if (estado.token) {
+    try { estado.usuario = await api('/api/auth/eu'); } catch { sairLocal(); }
+  }
+  aplicarUsuario();
+  desenharCarrinho();
+  carregarCardapio();
+}
+iniciar();

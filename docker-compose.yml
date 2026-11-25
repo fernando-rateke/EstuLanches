@@ -1,92 +1,111 @@
-# =============================================================================
-# EstuLanches - ambiente de produção
-#   Subir:      docker compose up -d --build
-#   Estado:     docker compose ps
-#   Logs:       docker compose logs app db
-#   Testes:     docker compose --profile test run --rm test
-# Variáveis sensíveis ficam no arquivo .env (copie de .env.example).
-# =============================================================================
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │ EstuLanches · docker-compose.yml                                         │
+# │                                                                          │
+# │ Descreve TODOS os containers do sistema e como eles se ligam.            │
+# │                                                                          │
+# │   Subir tudo ........ docker compose up -d --build                       │
+# │   Ver estado ........ docker compose ps                                  │
+# │   Ver logs .......... docker compose logs app db                         │
+# │   Rodar testes ...... docker compose --profile test run --rm test        │
+# │   Parar ............. docker compose down   (os dados continuam salvos)  │
+# │                                                                          │
+# │ Senhas NÃO ficam aqui: vêm do arquivo .env (copie de .env.example).      │
+# │ A sintaxe ${VAR:?mensagem} faz o compose PARAR se a variável faltar.     │
+# └──────────────────────────────────────────────────────────────────────────┘
 name: estulanches
 
 services:
+
+  # ═══ BANCO DE DADOS ═══════════════════════════════════════════════════════
   db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine                 # imagem oficial, versão fixa
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-estulanches}
       POSTGRES_USER: ${POSTGRES_USER:-estulanches}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
-      TZ: America/Sao_Paulo
+      TZ: America/Sao_Paulo                   # horário de Brasília nos logs
     volumes:
-      - db_data:/var/lib/postgresql/data      # dados persistem entre reinícios
+      # VOLUME = pasta que sobrevive ao container. Apagou o container? Os
+      # pedidos e contas continuam aqui.
+      - db_data:/var/lib/postgresql/data
     networks:
-      - backend                               # banco NÃO é exposto para fora
-    healthcheck:
+      - backend                               # SÓ a rede interna (sem "ports:")
+    healthcheck:                              # "o banco já aceita conexões?"
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 10
-    restart: unless-stopped
+    restart: unless-stopped                   # caiu? o Docker sobe de novo
     security_opt:
       - no-new-privileges:true
     deploy:
       resources:
         limits: { cpus: "1.0", memory: 512M }
-    logging: &logging
+    logging: &logging                         # "&logging" = reaproveitado no app
       driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+      options: { max-size: "10m", max-file: "3" }   # log não enche o disco
 
+  # ═══ APLICAÇÃO (API + site) ═══════════════════════════════════════════════
   app:
     build:
       context: .
-      target: production
+      target: production                      # etapa final do Dockerfile
       args:
         APP_VERSION: ${APP_VERSION:-1.0.0}
-    image: estulanches:${APP_VERSION:-1.0.0}
+    image: estulanches:${APP_VERSION:-1.0.0}  # nome:versão da imagem gerada
     environment:
       NODE_ENV: production
       PORT: 3000
       TZ: America/Sao_Paulo
+      # Conexão com o banco. "db" é o NOME DO SERVIÇO acima: dentro das redes
+      # do compose os containers se acham pelo nome.
       PGHOST: db
       PGPORT: 5432
       PGDATABASE: ${POSTGRES_DB:-estulanches}
       PGUSER: ${POSTGRES_USER:-estulanches}
       PGPASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
-      ADMIN_TOKEN: ${ADMIN_TOKEN:?defina ADMIN_TOKEN no .env}
+      # Conta da equipe da cantina (criada na primeira subida)
+      CANTINA_LOGIN: ${CANTINA_LOGIN:-cantina}
+      CANTINA_SENHA: ${CANTINA_SENHA:?defina CANTINA_SENHA no .env}
+      SESSAO_HORAS: ${SESSAO_HORAS:-8}
+      # Ajustes de desempenho e proteção
       DB_POOL_MAX: ${DB_POOL_MAX:-10}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
       RATE_LIMIT_PEDIDOS_MAX: ${RATE_LIMIT_PEDIDOS_MAX:-20}
+      RATE_LIMIT_LOGIN_MAX: ${RATE_LIMIT_LOGIN_MAX:-10}
     ports:
-      - "${APP_PORT:-8080}:3000"              # http://localhost:8080
+      - "${APP_PORT:-8080}:3000"              # PORTA DO PC : PORTA DO CONTAINER
     depends_on:
       db:
-        condition: service_healthy            # só sobe quando o banco estiver pronto
+        condition: service_healthy            # espera o banco ficar "healthy"
     networks:
-      - frontend
-      - backend
+      - frontend                              # para receber os acessos
+      - backend                               # para falar com o banco
     restart: unless-stopped
-    init: true                                # repassa sinais e evita processos zumbis
-    read_only: true                           # sistema de arquivos somente leitura
+    init: true                                # repassa o "desligar" e limpa processos
+    # ── Trancas de segurança ──
+    read_only: true                           # ninguém grava arquivos no container
     tmpfs:
-      - /tmp
+      - /tmp                                  # única pasta gravável (na memória)
     cap_drop:
-      - ALL                                   # remove todas as capabilities do Linux
+      - ALL                                   # tira todos os "superpoderes" do Linux
     security_opt:
-      - no-new-privileges:true
+      - no-new-privileges:true                # não consegue virar root depois
     deploy:
       resources:
-        limits: { cpus: "0.5", memory: 256M }
+        limits: { cpus: "0.5", memory: 256M } # um bug não derruba o servidor
     logging: *logging
 
-  # ----- Somente para testes (perfil "test": não sobe no "up" normal) -----
+  # ═══ SÓ PARA TESTES (perfil "test": não sobe no "up" normal) ═════════════
   db-test:
     profiles: ["test"]
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: estulanches_test
       POSTGRES_USER: teste
-      POSTGRES_PASSWORD: teste
+      POSTGRES_PASSWORD: teste                # banco descartável, sem dados reais
     tmpfs:
-      - /var/lib/postgresql/data              # banco descartável, em memória
+      - /var/lib/postgresql/data              # fica na memória e some ao final
     networks:
       - backend
     healthcheck:
@@ -99,7 +118,7 @@ services:
     profiles: ["test"]
     build:
       context: .
-      target: test
+      target: test                            # etapa "test" do Dockerfile
     image: estulanches:test
     environment:
       PGHOST: db-test
@@ -112,10 +131,12 @@ services:
     networks:
       - backend
 
+# ═══ REDES ══════════════════════════════════════════════════════════════════
 networks:
-  frontend:
+  frontend:                                   # rede normal
   backend:
-    internal: true                            # rede interna, sem saída para a internet
+    internal: true                            # rede FECHADA: sem acesso de fora
 
+# ═══ VOLUMES ════════════════════════════════════════════════════════════════
 volumes:
   db_data:

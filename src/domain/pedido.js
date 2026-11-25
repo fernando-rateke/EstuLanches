@@ -23,13 +23,18 @@ function podeTransitar(atual, novo) {
   return (TRANSICOES[atual] || []).includes(novo);
 }
 
-/** Valida o corpo de criação de pedido. Itens repetidos são somados. */
+/** O aluno só pode desistir enquanto a cozinha ainda não começou a preparar. */
+function alunoPodeCancelar(status) {
+  return status === 'recebido';
+}
+
+/**
+ * Valida o corpo de criação de pedido. Itens repetidos são somados.
+ * O nome do aluno NÃO vem do formulário: vem da conta logada.
+ */
 function validarPedido(entrada) {
   const erros = [];
   const e = entrada && typeof entrada === 'object' ? entrada : {};
-
-  const nome = typeof e.cliente_nome === 'string' ? e.cliente_nome.trim() : '';
-  if (nome.length < 2 || nome.length > 100) erros.push('cliente_nome deve ter entre 2 e 100 caracteres');
 
   let observacao = '';
   if (e.observacao !== undefined) {
@@ -58,7 +63,7 @@ function validarPedido(entrada) {
   }
 
   const itens = [...agrupados].map(([produto_id, quantidade]) => ({ produto_id, quantidade }));
-  return { erros, dados: { cliente_nome: nome, observacao, itens } };
+  return { erros, dados: { observacao, itens } };
 }
 
 /**
@@ -90,6 +95,7 @@ module.exports = {
   MAX_ITENS,
   MAX_QUANTIDADE,
   podeTransitar,
+  alunoPodeCancelar,
   validarPedido,
   calcularTotal,
   formatarReais,

@@ -7,7 +7,7 @@ const { idDaRota, exigirValido } = require('./util');
 
 const CAMPOS = 'id, nome, descricao, categoria, preco_centavos, disponivel';
 
-function rotasProdutos({ pool, admin }) {
+function rotasProdutos({ pool, cantina }) {
   const r = express.Router();
 
   // Público: cardápio com os produtos disponíveis.
@@ -18,7 +18,7 @@ function rotasProdutos({ pool, admin }) {
   });
 
   // Cantina: todos os produtos, inclusive os indisponíveis.
-  r.get('/todos', admin, async (req, res) => {
+  r.get('/todos', cantina, async (req, res) => {
     const { rows } = await pool.query(`SELECT ${CAMPOS} FROM produtos ORDER BY categoria, nome`);
     res.json(rows);
   });
@@ -29,7 +29,7 @@ function rotasProdutos({ pool, admin }) {
     res.json(rows[0]);
   });
 
-  r.post('/', admin, async (req, res) => {
+  r.post('/', cantina, async (req, res) => {
     const d = exigirValido(validarProduto(req.body));
     const { rows } = await pool.query(
       `INSERT INTO produtos (nome, descricao, categoria, preco_centavos, disponivel)
@@ -39,7 +39,7 @@ function rotasProdutos({ pool, admin }) {
     res.status(201).json(rows[0]);
   });
 
-  r.patch('/:id', admin, async (req, res) => {
+  r.patch('/:id', cantina, async (req, res) => {
     const id = idDaRota(req);
     const d = exigirValido(validarProduto(req.body, { parcial: true }));
     // Os nomes de coluna vêm da validação (lista fixa), nunca do usuário;
@@ -54,7 +54,7 @@ function rotasProdutos({ pool, admin }) {
     res.json(rows[0]);
   });
 
-  r.delete('/:id', admin, async (req, res) => {
+  r.delete('/:id', cantina, async (req, res) => {
     const { rowCount } = await pool.query('DELETE FROM produtos WHERE id = $1', [idDaRota(req)]);
     if (!rowCount) throw new ErroApp(404, 'produto não encontrado');
     res.status(204).end();
